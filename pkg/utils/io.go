@@ -13,6 +13,7 @@ var imageFileExtensionContentTypeMap = map[string]string{
 	"png":  "image/png",
 	"gif":  "image/gif",
 	"webp": "image/webp",
+	"pdf":  "application/pdf",
 }
 
 // GetImageContentType returns the content type of specified image file extension or returns empty when the file extension is not image or not supported

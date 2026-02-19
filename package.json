@@ -36,6 +36,7 @@
     "line-awesome": "^1.3.0",
     "moment": "^2.30.1",
     "moment-timezone": "^0.6.0",
+    "pdfjs-dist": "^5.4.624",
     "pinia": "^3.0.4",
     "register-service-worker": "^1.7.2",
     "skeleton-elements": "^4.0.1",

@@ -248,6 +248,8 @@ export default defineConfig(() => {
                             return 'vendor-desktop';
                         } else if (/plugin-vuetify:/i.test(id)) {
                             return 'vendor-desktop';
+                        } else if (/[\\/]node_modules[\\/]pdfjs-dist[\\/]/i.test(id)) {
+                            return 'vendor-pdfjs';
                         } else if (/[\\/]node_modules[\\/]/i.test(id)) {
                             return 'vendor-common';
                         } else if (/[\\/]src[\\/](core|consts|models|stores)[\\/]/i.test(id)) {

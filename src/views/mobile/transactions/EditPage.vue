@@ -404,7 +404,8 @@
                                         <f7-icon class="picture-control-icon picture-remove-icon" f7="trash" v-if="pictureInfo.pictureId !== removingPictureId"></f7-icon>
                                         <f7-preloader color="white" :size="28" v-if="pictureInfo.pictureId === removingPictureId" />
                                     </div>
-                                    <img alt="picture" :src="getTransactionPictureUrl(pictureInfo)"/>
+                                    <pdf-thumbnail v-if="isPdfUrl(pictureInfo.originalUrl)" :src="getTransactionPictureUrl(pictureInfo)" :size="100" />
+                                    <img v-else alt="picture" :src="getTransactionPictureUrl(pictureInfo)"/>
                                 </div>
                             </swiper-slide>
                             <swiper-slide @click="showOpenPictureDialog" v-if="canAddTransactionPicture">
@@ -479,11 +480,13 @@
         <f7-photo-browser ref="pictureBrowser" type="popup" navbar-of-text="/"
                           :navbar-show-count="true" :exposition="false"
                           :photos="transactionPictures" :thumbs="transactionThumbs" />
-        <input ref="pictureInput" type="file" style="display: none" :accept="`${SUPPORTED_IMAGE_EXTENSIONS};capture=camera`" @change="uploadPicture($event)" />
+        <input ref="pictureInput" type="file" style="display: none" :accept="`${SUPPORTED_PICTURE_EXTENSIONS};capture=camera`" @change="uploadPicture($event)" />
     </f7-page>
 </template>
 
 <script setup lang="ts">
+import PdfThumbnail from '@/components/common/PdfThumbnail.vue';
+
 import { ref, computed, useTemplateRef } from 'vue';
 import type { PhotoBrowser, Router } from 'framework7/types';
 
@@ -509,7 +512,7 @@ import { TransactionEditScopeType, TransactionType } from '@/core/transaction.ts
 import { ScheduledTemplateFrequencyType, TemplateType } from '@/core/template.ts';
 import { TRANSACTION_MAX_AMOUNT, TRANSACTION_MIN_AMOUNT } from '@/consts/transaction.ts';
 import { KnownErrorCode } from '@/consts/api.ts';
-import { SUPPORTED_IMAGE_EXTENSIONS } from '@/consts/file.ts';
+import { SUPPORTED_PICTURE_EXTENSIONS } from '@/consts/file.ts';
 
 import { TransactionTemplate } from '@/models/transaction_template.ts';
 import type { TransactionPictureInfoBasicResponse } from '@/models/transaction_picture_info.ts';
@@ -523,6 +526,7 @@ import {
 import { formatCoordinate } from '@/lib/coordinate.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
 import { getTransactionPrimaryCategoryName, getTransactionSecondaryCategoryName } from '@/lib/category.ts';
+import { isPdfUrl } from '@/lib/pdf.ts';
 import { setTransactionModelByTransaction } from '@/lib/transaction.ts';
 import { getMapProvider, isTransactionPicturesEnabled } from '@/lib/server_settings.ts';
 import logger from '@/lib/logger.ts';
@@ -696,6 +700,10 @@ const transactionPictures = computed<Record<string, string | undefined>[]>(() =>
     }
 
     for (const picture of transaction.value.pictures) {
+        if (isPdfUrl(picture.originalUrl)) {
+            continue;
+        }
+
         thumbs.push({
             url: getTransactionPictureUrl(picture)
         });
@@ -712,6 +720,10 @@ const transactionThumbs = computed<(string | undefined)[]>(() => {
     }
 
     for (const picture of transaction.value.pictures) {
+        if (isPdfUrl(picture.originalUrl)) {
+            continue;
+        }
+
         thumbs.push(getTransactionPictureUrl(picture));
     }
 
@@ -1219,7 +1231,11 @@ function uploadPicture(event: Event): void {
 
 function viewOrRemovePicture(pictureInfo: TransactionPictureInfoBasicResponse): void {
     if (mode.value !== TransactionEditPageMode.Add && mode.value !== TransactionEditPageMode.Edit && transaction.value.pictures && transaction.value.pictures.length) {
-        pictureBrowser.value?.open();
+        if (isPdfUrl(pictureInfo.originalUrl)) {
+            window.open(getTransactionPictureUrl(pictureInfo), '_blank');
+        } else {
+            pictureBrowser.value?.open();
+        }
         return;
     }
 

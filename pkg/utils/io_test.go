@@ -12,6 +12,11 @@ func TestGetImageContentType(t *testing.T) {
 	actualContentType := GetImageContentType(fileName)
 	assert.Equal(t, expectedContentType, actualContentType)
 
+	fileName = "pdf"
+	expectedContentType = "application/pdf"
+	actualContentType = GetImageContentType(fileName)
+	assert.Equal(t, expectedContentType, actualContentType)
+
 	fileName = "bmp"
 	expectedContentType = ""
 	actualContentType = GetImageContentType(fileName)

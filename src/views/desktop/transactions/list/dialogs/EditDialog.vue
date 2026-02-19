@@ -376,7 +376,19 @@
                                 <v-avatar rounded="lg" variant="tonal" size="160"
                                           class="cursor-pointer transaction-picture"
                                           color="rgba(0,0,0,0)" @click="viewOrRemovePicture(pictureInfo)">
-                                    <v-img :src="getTransactionPictureUrl(pictureInfo)">
+                                    <pdf-thumbnail v-if="isPdfUrl(pictureInfo.originalUrl)" :src="getTransactionPictureUrl(pictureInfo)" :size="160">
+                                        <template #placeholder>
+                                            <div class="d-flex align-center justify-center fill-height bg-light-primary">
+                                                <v-progress-circular color="grey-500" indeterminate size="48"></v-progress-circular>
+                                            </div>
+                                        </template>
+                                        <template #error>
+                                            <div class="d-flex align-center justify-center fill-height bg-light-primary">
+                                                <span class="pdf-thumbnail-error-text">PDF</span>
+                                            </div>
+                                        </template>
+                                    </pdf-thumbnail>
+                                    <v-img v-else :src="getTransactionPictureUrl(pictureInfo)">
                                         <template #placeholder>
                                             <div class="d-flex align-center justify-center fill-height bg-light-primary">
                                                 <v-progress-circular color="grey-500" indeterminate size="48"></v-progress-circular>
@@ -459,11 +471,12 @@
 
     <confirm-dialog ref="confirmDialog"/>
     <snack-bar ref="snackbar" />
-    <input ref="pictureInput" type="file" style="display: none" :accept="SUPPORTED_IMAGE_EXTENSIONS" @change="uploadPicture($event)" />
+    <input ref="pictureInput" type="file" style="display: none" :accept="SUPPORTED_PICTURE_EXTENSIONS" @change="uploadPicture($event)" />
 </template>
 
 <script setup lang="ts">
 import MapView from '@/components/common/MapView.vue';
+import PdfThumbnail from '@/components/common/PdfThumbnail.vue';
 import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
@@ -490,7 +503,7 @@ import { CategoryType } from '@/core/category.ts';
 import { TransactionType, TransactionEditScopeType } from '@/core/transaction.ts';
 import { TemplateType, ScheduledTemplateFrequencyType } from '@/core/template.ts';
 import { KnownErrorCode } from '@/consts/api.ts';
-import { SUPPORTED_IMAGE_EXTENSIONS } from '@/consts/file.ts';
+import { SUPPORTED_PICTURE_EXTENSIONS } from '@/consts/file.ts';
 
 import { TransactionTemplate } from '@/models/transaction_template.ts';
 import type { TransactionPictureInfoBasicResponse } from '@/models/transaction_picture_info.ts';
@@ -506,6 +519,7 @@ import {
     getTransactionPrimaryCategoryName,
     getTransactionSecondaryCategoryName
 } from '@/lib/category.ts';
+import { isPdfUrl } from '@/lib/pdf.ts';
 import { type SetTransactionOptions, setTransactionModelByTransaction } from '@/lib/transaction.ts';
 import {
     isTransactionPicturesEnabled,
