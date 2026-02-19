@@ -91,49 +91,10 @@ jobs:
           package-file-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-package-file-name-prefix }}
           package-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-package-artifact-name-prefix }}
 
-  build-linux-docker-and-package-arm:
-    runs-on: ubuntu-24.04-arm
-    needs:
-      - setup
-    strategy:
-      matrix:
-        include:
-          - platform: linux/arm64/v8
-            platform-name: linux-arm64
-          - platform: linux/arm/v7
-            platform-name: linux-armv7
-          - platform: linux/arm/v6
-            platform-name: linux-armv6
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - uses: ./.github/actions/build-linux-docker-and-package
-        with:
-          release-build: 1
-          build-unix-time: ${{ needs.setup.outputs.build-unix-time }}
-          build-date: ${{ needs.setup.outputs.build-date }}
-          check-3rd-api: ${{ vars.CHECK_3RD_API }}
-          skip-tests: ${{ vars.SKIP_TESTS }}
-          platform: ${{ matrix.platform }}
-          platform-name: ${{ matrix.platform-name }}
-          docker-push: true
-          docker-image-name: ghcr.io/${{ github.repository }}
-          docker-username: ${{ github.actor }}
-          docker-password: ${{ secrets.GITHUB_TOKEN }}
-          docker-registry: ghcr.io
-          docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
-          docker-bake-meta-artifact-name: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-artifact-name }}
-          docker-bake-digests-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-digests-file-path }}
-          docker-bake-digests-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-docker-digests-artifact-name-prefix }}
-          package-file-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-package-file-name-prefix }}
-          package-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-package-artifact-name-prefix }}
-
   push-linux-docker:
     needs:
       - setup
       - build-linux-docker-and-package-x86
-      - build-linux-docker-and-package-arm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -156,7 +117,6 @@ jobs:
     needs:
       - setup
       - build-linux-docker-and-package-x86
-      - build-linux-docker-and-package-arm
       - push-linux-docker
     steps:
       - name: Download all packaged files
