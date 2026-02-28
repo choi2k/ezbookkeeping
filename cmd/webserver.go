@@ -130,6 +130,7 @@ func startWebServer(c *core.CliContext) error {
 	router.Static("/css", filepath.Join(config.StaticRootPath, "css"))
 	router.Static("/img", filepath.Join(config.StaticRootPath, "img"))
 	router.Static("/fonts", filepath.Join(config.StaticRootPath, "fonts"))
+	router.Static("/worker", filepath.Join(config.StaticRootPath, "worker"))
 
 	router.StaticFile("robots.txt", filepath.Join(config.StaticRootPath, "robots.txt"))
 	router.StaticFile("favicon.ico", filepath.Join(config.StaticRootPath, "favicon.ico"))
@@ -148,6 +149,7 @@ func startWebServer(c *core.CliContext) error {
 	router.Static("/mobile/css", filepath.Join(config.StaticRootPath, "css"))
 	router.Static("/mobile/img", filepath.Join(config.StaticRootPath, "img"))
 	router.Static("/mobile/fonts", filepath.Join(config.StaticRootPath, "fonts"))
+	router.Static("/mobile/worker", filepath.Join(config.StaticRootPath, "worker"))
 	router.StaticFile("/mobile/favicon.ico", filepath.Join(config.StaticRootPath, "favicon.ico"))
 	router.StaticFile("/mobile/favicon.png", filepath.Join(config.StaticRootPath, "favicon.png"))
 	router.StaticFile("/mobile/touchicon.png", filepath.Join(config.StaticRootPath, "touchicon.png"))
@@ -164,6 +166,7 @@ func startWebServer(c *core.CliContext) error {
 	router.Static("/desktop/css", filepath.Join(config.StaticRootPath, "css"))
 	router.Static("/desktop/img", filepath.Join(config.StaticRootPath, "img"))
 	router.Static("/desktop/fonts", filepath.Join(config.StaticRootPath, "fonts"))
+	router.Static("/desktop/worker", filepath.Join(config.StaticRootPath, "worker"))
 	router.StaticFile("/desktop/favicon.ico", filepath.Join(config.StaticRootPath, "favicon.ico"))
 	router.StaticFile("/desktop/favicon.png", filepath.Join(config.StaticRootPath, "favicon.png"))
 	router.StaticFile("/desktop/touchicon.png", filepath.Join(config.StaticRootPath, "touchicon.png"))
