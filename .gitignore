@@ -140,6 +140,10 @@ node_modules/
 
 # Node.js Build Target
 dist/
+public/
+
+# Playwright MCP screenshots
+.playwright-mcp/
 
 # Visual Studio Code
 .vscode/
