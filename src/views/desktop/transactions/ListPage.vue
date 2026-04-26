@@ -427,6 +427,9 @@
                                                     </v-list>
                                                 </v-menu>
                                             </th>
+                                            <th class="transaction-table-column-balance text-no-wrap" v-if="showAccountBalanceColumn">
+                                                <span>{{ tt('Account Balance') }}</span>
+                                            </th>
                                             <th class="transaction-table-column-tags text-no-wrap" v-if="showTagInTransactionListPage">
                                                 <v-menu ref="tagFilterMenu" class="transaction-tag-menu"
                                                         eager location="bottom" max-height="500"
@@ -513,7 +516,7 @@
 
                                         <tbody v-if="loading && (!transactions || !transactions.length || transactions.length < 1)">
                                         <tr :key="itemIdx" v-for="itemIdx in skeletonData">
-                                            <td class="px-0" :colspan="showTagInTransactionListPage ? 6 : 5">
+                                            <td class="px-0" :colspan="transactionTableColumnCount">
                                                 <v-skeleton-loader type="text" :loading="true"></v-skeleton-loader>
                                             </td>
                                         </tr>
@@ -521,7 +524,7 @@
 
                                         <tbody v-if="!loading && (!transactions || !transactions.length || transactions.length < 1)">
                                         <tr>
-                                            <td :colspan="showTagInTransactionListPage ? 6 : 5">{{ tt('No transaction data') }}</td>
+                                            <td :colspan="transactionTableColumnCount">{{ tt('No transaction data') }}</td>
                                         </tr>
                                         </tbody>
 
@@ -530,7 +533,7 @@
                                                v-for="(transaction, idx) in transactions">
                                             <tr class="transaction-list-row-date no-hover text-sm"
                                                 v-if="pageType === TransactionListPageType.List.type && (idx === 0 || (idx > 0 && (transaction.gregorianCalendarYearDashMonthDashDay !== transactions[idx - 1]!.gregorianCalendarYearDashMonthDashDay)))">
-                                                <td :colspan="showTagInTransactionListPage ? 6 : 5" class="font-weight-bold">
+                                                <td :colspan="transactionTableColumnCount" class="font-weight-bold">
                                                     <div class="d-flex align-center">
                                                         <span>{{ getDisplayLongDate(transaction) }}</span>
                                                         <v-chip class="ms-1" color="default" size="x-small"
@@ -578,6 +581,9 @@
                                                         <v-icon class="icon-with-direction mx-1" size="13" :icon="mdiArrowRight" v-if="transaction.sourceAccount && transaction.type === TransactionType.Transfer && transaction.destinationAccount && transaction.sourceAccount.id !== transaction.destinationAccount.id"></v-icon>
                                                         <span v-if="transaction.sourceAccount && transaction.type === TransactionType.Transfer && transaction.destinationAccount && transaction.sourceAccount.id !== transaction.destinationAccount.id">{{ transaction.destinationAccount.name }}</span>
                                                     </div>
+                                                </td>
+                                                <td class="transaction-table-column-balance" v-if="showAccountBalanceColumn">
+                                                    <span>{{ getDisplayAccountBalanceAfter(transaction) }}</span>
                                                 </td>
                                                 <td class="transaction-table-column-tags" v-if="showTagInTransactionListPage">
                                                     <v-chip class="transaction-tag" size="small" :prepend-icon="mdiPound"
@@ -663,6 +669,7 @@ import { useDisplay, useTheme } from 'vuetify';
 
 import { useI18n } from '@/locales/helpers.ts';
 import { TransactionListPageType, useTransactionListPageBase } from '@/views/base/transactions/TransactionListPageBase.ts';
+import { AccountType } from '@/core/account.ts';
 
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
@@ -775,7 +782,8 @@ const {
     tt,
     getAllRecentMonthDateRanges,
     getWeekdayLongName,
-    getCurrentNumeralSystemType
+    getCurrentNumeralSystemType,
+    formatAmountToLocalizedNumeralsWithCurrency
 } = useI18n();
 
 const {
@@ -871,6 +879,12 @@ const showCustomMonthDialog = ref<boolean>(false);
 const showFilterAccountDialog = ref<boolean>(false);
 const showFilterCategoryDialog = ref<boolean>(false);
 const showFilterTagDialog = ref<boolean>(false);
+
+interface AccountBalanceEntry {
+    opening: number;
+    closing: number;
+}
+const transactionAccountBalances = ref<Record<string, AccountBalanceEntry>>({});
 
 const isDarkMode = computed<boolean>(() => theme.global.name.value === ThemeType.Dark);
 const numeralSystem = computed<NumeralSystem>(() => getCurrentNumeralSystemType());
@@ -1046,6 +1060,32 @@ const skeletonData = computed<number[]>(() => {
     return data;
 });
 
+const singleFilterAccount = computed(() => {
+    if (queryAllFilterAccountIdsCount.value !== 1) {
+        return null;
+    }
+
+    const account = allAccountsMap.value[query.value.accountIds];
+
+    if (!account || account.type !== AccountType.SingleAccount.type) {
+        return null;
+    }
+
+    return account;
+});
+
+const showAccountBalanceColumn = computed<boolean>(() => !!singleFilterAccount.value);
+
+const transactionTableColumnCount = computed<number>(() => {
+    let count = showTagInTransactionListPage.value ? 6 : 5;
+
+    if (showAccountBalanceColumn.value) {
+        count += 1;
+    }
+
+    return count;
+});
+
 const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | null>(() => {
     if (queryMonthlyData.value) {
         const transactionData = currentMonthTransactionData.value;
@@ -1163,6 +1203,63 @@ function init(initProps: TransactionListProps): void {
     });
 }
 
+function loadAccountBalanceMap(): void {
+    const account = singleFilterAccount.value;
+
+    if (!account) {
+        transactionAccountBalances.value = {};
+        return;
+    }
+
+    const requestedAccountId = account.id;
+    const requestedMinTime = query.value.minTime || 0;
+    const requestedMaxTime = query.value.maxTime || 0;
+
+    transactionsStore.getReconciliationStatements({
+        accountId: requestedAccountId,
+        startTime: requestedMinTime,
+        endTime: requestedMaxTime
+    }).then(result => {
+        const currentAccount = singleFilterAccount.value;
+
+        if (!currentAccount || currentAccount.id !== requestedAccountId
+            || (query.value.minTime || 0) !== requestedMinTime
+            || (query.value.maxTime || 0) !== requestedMaxTime) {
+            return;
+        }
+
+        const map: Record<string, AccountBalanceEntry> = {};
+
+        for (const item of result.transactions) {
+            map[item.id] = {
+                opening: item.accountOpeningBalance,
+                closing: item.accountClosingBalance
+            };
+        }
+
+        transactionAccountBalances.value = map;
+    }).catch(error => {
+        logger.error('failed to load account balance map for transaction list', error);
+    });
+}
+
+function getDisplayAccountBalanceAfter(transaction: Transaction): string {
+    const account = singleFilterAccount.value;
+
+    if (!account) {
+        return '';
+    }
+
+    const entry = transactionAccountBalances.value[transaction.id];
+
+    if (!entry) {
+        return '';
+    }
+
+    const balance = account.isLiability ? -entry.closing : entry.closing;
+    return formatAmountToLocalizedNumeralsWithCurrency(balance, account.currency);
+}
+
 function reload(force: boolean, init: boolean): void {
     loading.value = true;
 
@@ -1212,6 +1309,8 @@ function reload(force: boolean, init: boolean): void {
         if (force) {
             snackbar.value?.showMessage('Data has been updated');
         }
+
+        loadAccountBalanceMap();
     }).catch(error => {
         loading.value = false;
         currentPageTransactions.value = [];
@@ -1810,6 +1909,10 @@ init(props);
 
 .transaction-table .transaction-table-column-account {
     min-width: 160px;
+}
+
+.transaction-table .transaction-table-column-balance {
+    min-width: 120px;
 }
 
 .transaction-table .transaction-table-column-tags {
