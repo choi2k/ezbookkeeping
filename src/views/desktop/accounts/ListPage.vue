@@ -46,6 +46,8 @@
                         </v-tabs>
                     </v-navigation-drawer>
                     <v-main>
+                        <div class="d-flex flex-row flex-grow-1 w-100">
+                        <div :class="{ 'account-list-area': true, 'account-list-area-constrained': !!inlinePanelAccountId }">
                         <v-window class="d-flex flex-grow-1 disable-tab-transition w-100-window-container" v-model="activeTab">
                             <v-window-item value="accountPage">
                                 <v-card variant="flat" min-height="780">
@@ -209,7 +211,8 @@
                                                                 <div class="d-flex account-toolbar align-center">
                                                                     <v-btn class="px-2" density="comfortable" color="default" variant="text"
                                                                            :disabled="loading" :prepend-icon="mdiListBoxOutline"
-                                                                           :to="`/transaction/list?accountIds=${element.getAccountOrSubAccountId(activeSubAccount[element.id])}`">
+                                                                           :active="inlinePanelAccountId === element.getAccountOrSubAccountId(activeSubAccount[element.id])"
+                                                                           @click="openInlinePanel(element.getAccountOrSubAccountId(activeSubAccount[element.id]))">
                                                                         {{ tt('Transaction List') }}
                                                                     </v-btn>
                                                                     <v-btn class="px-2 ms-1" density="comfortable" color="default" variant="text"
@@ -287,6 +290,18 @@
                                 </v-card>
                             </v-window-item>
                         </v-window>
+                        </div>
+                        <div class="account-list-inline-panel flex-grow-1" v-if="inlinePanelAccountId">
+                            <reconciliation-statement-panel
+                                :account-id="inlinePanelAccountId"
+                                :start-time="0"
+                                :end-time="0"
+                                @close="closeInlinePanel"
+                                @transactions-updated="reload(false)"
+                                @error="onShowDateRangeError"
+                            />
+                        </div>
+                        </div>
                     </v-main>
                 </v-layout>
             </v-card>
@@ -318,6 +333,7 @@ import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
 import SnackBar from '@/components/desktop/SnackBar.vue';
 import EditDialog from './list/dialogs/EditDialog.vue';
 import ReconciliationStatementDialog from './list/dialogs/ReconciliationStatementDialog.vue';
+import ReconciliationStatementPanel from './list/ReconciliationStatementPanel.vue';
 import MoveAllTransactionsDialog from '@/views/desktop/accounts/list/dialogs/MoveAllTransactionsDialog.vue';
 import ClearAllTransactionsDialog from '@/views/desktop/accounts/list/dialogs/ClearAllTransactionsDialog.vue';
 import AccountFilterSettingsCard from '@/views/desktop/common/cards/AccountFilterSettingsCard.vue';
@@ -404,6 +420,8 @@ const alwaysShowNav = ref<boolean>(display.mdAndUp.value);
 const showNav = ref<boolean>(display.mdAndUp.value);
 const showAccountsIncludedInTotalDialog = ref<boolean>(false);
 const showCustomDateRangeDialog = ref<boolean>(false);
+const inlinePanelAccountId = ref<string>('');
+const showInlinePanel = ref<boolean>(false);
 
 const hideAccountCategoriesWithoutAccounts = computed<boolean>(() => settingsStore.appSettings.hideCategoriesWithoutAccounts);
 const hasAnyVisibleAccount = computed<boolean>(() => accountsStore.allVisibleAccountsCount > 0);
@@ -698,6 +716,25 @@ function onShowDateRangeError(message: string): void {
     snackbar.value?.showError(message);
 }
 
+function openInlinePanel(accountOrSubAccountId: string): void {
+    if (!accountOrSubAccountId) {
+        return;
+    }
+
+    if (inlinePanelAccountId.value === accountOrSubAccountId && showInlinePanel.value) {
+        closeInlinePanel();
+        return;
+    }
+
+    inlinePanelAccountId.value = accountOrSubAccountId;
+    showInlinePanel.value = true;
+}
+
+function closeInlinePanel(): void {
+    showInlinePanel.value = false;
+    inlinePanelAccountId.value = '';
+}
+
 watch(() => display.mdAndUp.value, (newValue) => {
     alwaysShowNav.value = newValue;
 
@@ -712,6 +749,23 @@ reload(false);
 <style>
 .account-statistic-item-value {
     font-size: 1rem;
+}
+
+.account-list-area {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.account-list-area-constrained {
+    flex-grow: 0;
+    flex-shrink: 0;
+    width: 600px;
+    max-width: 600px;
+}
+
+.account-list-inline-panel {
+    border-inline-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    min-width: 0;
 }
 
 .account-category-tabs .v-tab.v-tab.v-btn {
