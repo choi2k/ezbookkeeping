@@ -21,13 +21,24 @@
         </template>
 
         <template #subtitle>
-            <div class="text-body-2 mt-1" v-if="!startTime && !endTime">
-                <span>{{ tt('All') }}</span>
-            </div>
-            <div class="text-body-2 mt-1" v-else>
-                <span>{{ displayStartDateTime }}</span>
-                <span> - </span>
-                <span>{{ displayEndDateTime }}</span>
+            <div class="d-flex align-center mt-1">
+                <v-select
+                    density="compact"
+                    variant="outlined"
+                    hide-details
+                    item-title="displayName"
+                    item-value="key"
+                    max-width="180"
+                    :disabled="loading"
+                    :items="dateRangeShortcuts"
+                    v-model="selectedDateRangeKey"
+                    @update:model-value="applyDateRange($event as string)"
+                />
+                <span class="text-body-2 ms-3" v-if="currentStartTime || currentEndTime">
+                    <span>{{ displayStartDateTime }}</span>
+                    <span> - </span>
+                    <span>{{ displayEndDateTime }}</span>
+                </span>
             </div>
         </template>
 
@@ -155,6 +166,7 @@ import { ref, computed, useTemplateRef, watch } from 'vue';
 import { useI18n } from '@/locales/helpers.ts';
 import { useReconciliationStatementPageBase } from '@/views/base/accounts/ReconciliationStatementPageBase.ts';
 
+import { useUserStore } from '@/stores/user.ts';
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
@@ -162,9 +174,22 @@ import { useTransactionsStore } from '@/stores/transaction.ts';
 import type { NameNumeralValue } from '@/core/base.ts';
 import type { NumeralSystem } from '@/core/numeral.ts';
 import { TransactionType } from '@/core/transaction.ts';
+import { DateRange } from '@/core/datetime.ts';
 import { Transaction, type TransactionReconciliationStatementResponseItem } from '@/models/transaction.ts';
 
+import {
+    getDateRangeByDateType,
+    getTodayLastUnixTime,
+    getTodayFirstUnixTime,
+    getUnixTimeBeforeUnixTime
+} from '@/lib/datetime.ts';
+
 import { mdiRefresh, mdiClose, mdiPencilBoxOutline } from '@mdi/js';
+
+interface DateRangeShortcut {
+    key: string;
+    displayName: string;
+}
 
 interface ReconciliationStatementPanelProps {
     accountId: string;
@@ -208,6 +233,7 @@ const {
     getDisplayAccountBalance
 } = useReconciliationStatementPageBase();
 
+const userStore = useUserStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionsStore = useTransactionsStore();
@@ -218,8 +244,65 @@ const editDialog = useTemplateRef<EditDialogType>('editDialog');
 const loading = ref<boolean>(false);
 const currentPage = ref<number>(1);
 const countPerPage = ref<number>(15);
+const selectedDateRangeKey = ref<string>('all');
+const currentStartTime = ref<number>(0);
+const currentEndTime = ref<number>(0);
 
 const numeralSystem = computed<NumeralSystem>(() => getCurrentNumeralSystemType());
+
+const dateRangeShortcuts = computed<DateRangeShortcut[]>(() => [
+    { key: 'all', displayName: tt('All') },
+    { key: 'thisMonth', displayName: tt('This month') },
+    { key: 'lastMonth', displayName: tt('Last month') },
+    { key: 'last90Days', displayName: tt('Recent 90 days') },
+    { key: 'thisYear', displayName: tt('This year') },
+    { key: 'lastYear', displayName: tt('Last year') }
+]);
+
+function computeRangeForKey(key: string): { minTime: number; maxTime: number } {
+    if (key === 'all') {
+        return { minTime: 0, maxTime: 0 };
+    }
+
+    if (key === 'last90Days') {
+        return {
+            minTime: getUnixTimeBeforeUnixTime(getTodayFirstUnixTime(), 89, 'days'),
+            maxTime: getTodayLastUnixTime()
+        };
+    }
+
+    const firstDayOfWeek = userStore.currentUserFirstDayOfWeek;
+    const fiscalYearStart = userStore.currentUserFiscalYearStart;
+
+    let dateType: number | undefined;
+
+    if (key === 'thisMonth') {
+        dateType = DateRange.ThisMonth.type;
+    } else if (key === 'lastMonth') {
+        dateType = DateRange.LastMonth.type;
+    } else if (key === 'thisYear') {
+        dateType = DateRange.ThisYear.type;
+    } else if (key === 'lastYear') {
+        dateType = DateRange.LastYear.type;
+    }
+
+    const range = getDateRangeByDateType(dateType, firstDayOfWeek, fiscalYearStart);
+
+    return {
+        minTime: range?.minTime ?? 0,
+        maxTime: range?.maxTime ?? 0
+    };
+}
+
+function applyDateRange(key: string): void {
+    selectedDateRangeKey.value = key;
+    const range = computeRangeForKey(key);
+    currentStartTime.value = range.minTime;
+    currentEndTime.value = range.maxTime;
+    composableStartTime.value = range.minTime;
+    composableEndTime.value = range.maxTime;
+    reload(false);
+}
 
 const reconciliationStatementsTablePageOptions = computed<NameNumeralValue[]>(() => {
     const linesCount = reconciliationStatements.value?.transactions.length;
@@ -285,8 +368,11 @@ function load(): void {
     }
 
     composableAccountId.value = props.accountId;
+    currentStartTime.value = props.startTime;
+    currentEndTime.value = props.endTime;
     composableStartTime.value = props.startTime;
     composableEndTime.value = props.endTime;
+    selectedDateRangeKey.value = (!props.startTime && !props.endTime) ? 'all' : selectedDateRangeKey.value;
     reconciliationStatements.value = undefined;
     currentPage.value = 1;
     loading.value = true;
@@ -297,8 +383,8 @@ function load(): void {
     ]).then(() => {
         return transactionsStore.getReconciliationStatements({
             accountId: props.accountId,
-            startTime: props.startTime,
-            endTime: props.endTime
+            startTime: currentStartTime.value,
+            endTime: currentEndTime.value
         });
     }).then(result => {
         if (composableAccountId.value !== props.accountId) {
