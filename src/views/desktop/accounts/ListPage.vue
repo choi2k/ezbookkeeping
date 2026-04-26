@@ -30,6 +30,17 @@
                         <v-divider />
                         <v-tabs show-arrows class="account-category-tabs my-4" direction="vertical"
                                 :disabled="loading" v-model="activeAccountCategoryType">
+                            <v-tab class="tab-text-truncate" :key="ALL_ACCOUNTS_CATEGORY_TYPE" :value="ALL_ACCOUNTS_CATEGORY_TYPE">
+                                <v-icon :icon="mdiViewGridOutline" />
+                                <div class="d-flex flex-column text-truncate ms-2">
+                                    <small class="text-truncate text-start smaller" v-if="!loading || allAccountCount > 0">{{ netAssets }}</small>
+                                    <small class="text-truncate text-start smaller my-1" v-else-if="loading && allAccountCount <= 0">
+                                        <v-skeleton-loader class="skeleton-no-margin"
+                                                           width="100px" height="16" type="text" :loading="true"></v-skeleton-loader>
+                                    </small>
+                                    <span class="text-truncate text-start">{{ tt('All Accounts') }}</span>
+                                </div>
+                            </v-tab>
                             <v-tab class="tab-text-truncate" :key="accountCategory.type" :value="accountCategory.type"
                                    v-for="accountCategory in AccountCategory.values(customAccountCategoryOrder)"
                                    v-show="!hideAccountCategoriesWithoutAccounts || (allCategorizedAccountsMap[accountCategory.type] && allCategorizedAccountsMap[accountCategory.type]!.accounts.length > 0)">
@@ -94,9 +105,9 @@
                                     </template>
 
                                     <v-card-text class="accounts-overview-title text-truncate pt-0">
-                                        <span class="accounts-overview-subtitle">{{ activeAccountCategory?.isLiability ? tt('Outstanding Balance') : tt('Balance') }}</span>
-                                        <v-skeleton-loader class="skeleton-no-margin ms-3 mb-2" width="120px" type="text" :loading="true" v-if="loading && activeAccountCategory && !hasAccount(activeAccountCategory)"></v-skeleton-loader>
-                                        <span class="accounts-overview-amount ms-3" v-else-if="!loading || !activeAccountCategory || hasAccount(activeAccountCategory)">{{ activeAccountCategoryTotalBalance }}</span>
+                                        <span class="accounts-overview-subtitle">{{ displayedBalanceLabel }}</span>
+                                        <v-skeleton-loader class="skeleton-no-margin ms-3 mb-2" width="120px" type="text" :loading="true" v-if="loading && !hasDisplayedAccounts"></v-skeleton-loader>
+                                        <span class="accounts-overview-amount ms-3" v-else-if="!loading || hasDisplayedAccounts">{{ displayedTotalBalance }}</span>
                                         <v-btn class="ms-2" density="compact" color="default" variant="text"
                                                :icon="true" :disabled="loading"
                                                @click="showAccountBalance = !showAccountBalance">
@@ -105,7 +116,7 @@
                                         </v-btn>
                                     </v-card-text>
 
-                                    <v-row class="ps-6 pe-6 pe-md-8" v-if="loading && activeAccountCategory && !hasAccount(activeAccountCategory)">
+                                    <v-row class="ps-6 pe-6 pe-md-8" v-if="loading && !hasDisplayedAccounts">
                                         <v-col cols="12">
                                             <v-card border class="card-title-with-bg account-card mb-8 h-auto">
                                                 <template #title>
@@ -139,7 +150,7 @@
                                         </v-col>
                                     </v-row>
 
-                                    <v-row class="ps-5 pe-2 pe-md-4" v-if="!loading && activeAccountCategory && !hasAccount(activeAccountCategory)">
+                                    <v-row class="ps-5 pe-2 pe-md-4" v-if="!loading && !hasDisplayedAccounts">
                                         <v-col cols="12">
                                             {{ tt('No available account') }}
                                         </v-col>
@@ -152,9 +163,9 @@
                                                 item-key="id"
                                                 handle=".drag-handle"
                                                 ghost-class="dragging-item"
-                                                :disabled="activeAccountCategoryVisibleAccountCount <= 1"
-                                                :list="allCategorizedAccountsMap[activeAccountCategory.type]!.accounts"
-                                                v-if="activeAccountCategory && allCategorizedAccountsMap[activeAccountCategory.type] && allCategorizedAccountsMap[activeAccountCategory.type]!.accounts && allCategorizedAccountsMap[activeAccountCategory.type]!.accounts.length"
+                                                :disabled="isAllAccountsView || activeAccountCategoryVisibleAccountCount <= 1"
+                                                :list="displayedAccounts"
+                                                v-if="displayedAccounts.length"
                                                 @change="onMove"
                                             >
                                                 <template #item="{ element }">
@@ -369,8 +380,11 @@ import {
     mdiListBoxOutline,
     mdiInvoiceListOutline,
     mdiDrag,
-    mdiDotsVertical
+    mdiDotsVertical,
+    mdiViewGridOutline
 } from '@mdi/js';
+
+const ALL_ACCOUNTS_CATEGORY_TYPE = 0;
 
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
 type SnackBarType = InstanceType<typeof SnackBar>;
@@ -427,6 +441,40 @@ const hideAccountCategoriesWithoutAccounts = computed<boolean>(() => settingsSto
 const hasAnyVisibleAccount = computed<boolean>(() => accountsStore.allVisibleAccountsCount > 0);
 const activeAccountCategory = computed<AccountCategory | undefined>(() => AccountCategory.valueOf(activeAccountCategoryType.value));
 const activeAccountCategoryTotalBalance = computed<string>(() => accountCategoryTotalBalance(activeAccountCategory.value));
+
+const isAllAccountsView = computed<boolean>(() => activeAccountCategoryType.value === ALL_ACCOUNTS_CATEGORY_TYPE);
+
+const displayedAccounts = computed<Account[]>(() => {
+    if (isAllAccountsView.value) {
+        return allAccounts.value || [];
+    }
+
+    if (activeAccountCategory.value) {
+        return allCategorizedAccountsMap.value[activeAccountCategory.value.type]?.accounts || [];
+    }
+
+    return [];
+});
+
+const hasDisplayedAccounts = computed<boolean>(() => {
+    if (isAllAccountsView.value) {
+        return (allAccounts.value?.length || 0) > 0;
+    }
+
+    return activeAccountCategory.value ? hasAccount(activeAccountCategory.value) : false;
+});
+
+const displayedBalanceLabel = computed<string>(() => {
+    if (isAllAccountsView.value) {
+        return tt('Net assets');
+    }
+
+    return activeAccountCategory.value?.isLiability ? tt('Outstanding Balance') : tt('Balance');
+});
+
+const displayedTotalBalance = computed<string>(() => {
+    return isAllAccountsView.value ? netAssets.value : activeAccountCategoryTotalBalance.value;
+});
 
 const activeAccountCategoryVisibleAccountCount = computed<number>(() => {
     if (!activeAccountCategory.value) {
