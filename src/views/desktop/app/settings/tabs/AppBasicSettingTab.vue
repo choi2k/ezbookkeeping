@@ -158,7 +158,7 @@
                                     persistent-placeholder
                                     :label="tt('Transactions Per Page')"
                                     :placeholder="tt('Transactions Per Page')"
-                                    :items="[ 5, 10, 15, 20, 25, 30, 50 ]"
+                                    :items="[ 5, 10, 15, 20, 25, 30, 50, 100, 200, 500, 1000 ]"
                                     v-model="itemsCountInTransactionListPage"
                                 />
                             </v-col>

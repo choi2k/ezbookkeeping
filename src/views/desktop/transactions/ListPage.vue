@@ -891,7 +891,7 @@ const numeralSystem = computed<NumeralSystem>(() => getCurrentNumeralSystemType(
 
 const allPageCounts = computed<NameNumeralValue[]>(() => {
     const pageCounts: NameNumeralValue[] = [];
-    const availableCountPerPage: number[] = [ 5, 10, 15, 20, 25, 30, 50 ];
+    const availableCountPerPage: number[] = [ 5, 10, 15, 20, 25, 30, 50, 100, 200, 500, 1000 ];
 
     for (const count of availableCountPerPage) {
         pageCounts.push({ value: count, name: numeralSystem.value.replaceWesternArabicDigitsToLocalizedDigits(count.toString()) });
