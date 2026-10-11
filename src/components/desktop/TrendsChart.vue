@@ -291,14 +291,14 @@ defineExpose({
 </script>
 
 <style scoped>
-.trends-chart-container {
+:deep(.trends-chart-container) {
     width: 100%;
     height: 720px;
     margin-top: 10px;
 }
 
 @media (min-width: 600px) {
-    .trends-chart-container {
+    :deep(.trends-chart-container) {
         height: 790px;
     }
 }

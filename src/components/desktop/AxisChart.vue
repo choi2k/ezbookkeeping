@@ -1,6 +1,12 @@
 <template>
-    <v-chart autoresize :class="finalClass" :option="chartOptions"
-             @click="clickItem" @legendselectchanged="onLegendSelectChanged" />
+    <div>
+        <div class="d-flex justify-end" v-if="!skeleton && allSeries.length > 1">
+            <v-btn density="compact" variant="text" size="small" @click="setAllLegendsSelected(true)">{{ tt('Select All') }}</v-btn>
+            <v-btn density="compact" variant="text" size="small" @click="setAllLegendsSelected(false)">{{ tt('Select None') }}</v-btn>
+        </div>
+        <v-chart autoresize :class="finalClass" :option="chartOptions"
+                 @click="clickItem" @legendselectchanged="onLegendSelectChanged" />
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -451,6 +457,16 @@ function exportData(): { headers: string[], data: string[][] } {
 
 function onLegendSelectChanged(e: { selected: Record<string, boolean> }): void {
     selectedLegends.value = e.selected;
+}
+
+function setAllLegendsSelected(selected: boolean): void {
+    const allSelectedLegends: Record<string, boolean> = {};
+
+    for (const series of allSeries.value) {
+        allSelectedLegends[series.name] = selected;
+    }
+
+    selectedLegends.value = allSelectedLegends;
 }
 
 defineExpose({
