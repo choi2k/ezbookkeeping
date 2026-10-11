@@ -17,6 +17,7 @@ import HomePage from '@/views/desktop/HomePage.vue';
 import TransactionListPage from '@/views/desktop/transactions/ListPage.vue';
 
 import StatisticsTransactionPage from '@/views/desktop/statistics/TransactionPage.vue';
+import StatisticsMonthlyOverviewPage from '@/views/desktop/statistics/MonthlyOverviewPage.vue';
 
 import InsightsExplorerPage from '@/views/desktop/insights/ExplorerPage.vue';
 
@@ -137,6 +138,11 @@ const router = createRouter({
                         initTrendDateAggregationType: route.query['trendDateAggregationType'],
                         initAssetTrendsDateAggregationType: route.query['assetTrendsDateAggregationType']
                     })
+                },
+                {
+                    path: '/statistics/monthly',
+                    component: StatisticsMonthlyOverviewPage,
+                    beforeEnter: checkLogin
                 },
                 {
                     path: '/insights/explorer',

@@ -45,6 +45,12 @@
                     </router-link>
                 </li>
                 <li class="nav-link">
+                    <router-link to="/statistics/monthly">
+                        <v-icon class="nav-item-icon" :icon="mdiChartBar"/>
+                        <span class="nav-item-title">{{ tt('Monthly Overview') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
                     <router-link to="/insights/explorer">
                         <v-icon class="nav-item-icon" :icon="mdiCompassOutline"/>
                         <span class="nav-item-title">{{ tt('Insights Explorer') }}</span>
@@ -233,6 +239,7 @@ import {
     mdiTagOutline,
     mdiClipboardTextOutline,
     mdiClipboardTextClockOutline,
+    mdiChartBar,
     mdiChartPieOutline,
     mdiCompassOutline,
     mdiSwapHorizontal,
