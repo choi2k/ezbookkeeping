@@ -255,7 +255,7 @@ const trendsData = ref<TransactionStatisticTrendsResponseItem[]>([]);
 const selectedMonthIndex = ref<number>(-1);
 const focusedPrimaryCategory = ref<TransactionCategory | null>(null);
 const focusedSecondaryCategory = ref<TransactionCategory | null>(null);
-const showTransactions = ref<boolean>(false);
+const showTransactions = ref<boolean>(true);
 const transactions = ref<TransactionInfoResponse[]>([]);
 const transactionsLoading = ref<boolean>(false);
 const transactionsNextTimeId = ref<number>(0);
@@ -743,7 +743,7 @@ watch(transactionsScope, () => {
     if (showTransactions.value) {
         loadTransactions(true);
     }
-});
+}, { immediate: true });
 
 reload();
 </script>
