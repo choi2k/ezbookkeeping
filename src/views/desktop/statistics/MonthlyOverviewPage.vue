@@ -35,7 +35,7 @@
                 </v-card-text>
 
                 <v-card-text v-if="!focusedPrimaryCategory">
-                    <template :key="section.type" v-for="section in overviewSections">
+                    <template :key="section.key" v-for="section in overviewSections">
                         <div class="monthly-overview-section-title d-flex align-center">
                             <span class="text-h6">{{ section.title }}</span>
                             <v-spacer />
@@ -43,14 +43,15 @@
                         </div>
                         <div class="monthly-overview-category-grid" v-if="section.items.length">
                             <div class="monthly-overview-category-item cursor-pointer"
-                                 :key="item.category.id" v-for="item in section.items"
-                                 @click="selectPrimaryCategory(item.category)">
+                                 :class="{ 'monthly-overview-category-item-dimmed': item.account && focusedDebtAccount && focusedDebtAccount.id !== item.account.id }"
+                                 :key="item.id" v-for="item in section.items"
+                                 @click="onClickOverviewItem(item)">
                                 <div class="monthly-overview-category-ring" :style="getRingStyle(item.percent, section.color)">
                                     <div class="monthly-overview-category-icon">
-                                        <ItemIcon icon-type="category" :icon-id="item.category.icon" :color="item.category.color" size="32px" />
+                                        <ItemIcon :icon-type="section.iconType" :icon-id="item.icon" :color="item.color" size="32px" />
                                     </div>
                                 </div>
-                                <div class="monthly-overview-category-name text-truncate">{{ item.category.name }}</div>
+                                <div class="monthly-overview-category-name text-truncate">{{ item.name }}</div>
                                 <div :class="section.textClass">{{ formatAmount(item.amount) }}</div>
                             </div>
                         </div>
@@ -59,7 +60,7 @@
                     <div class="monthly-overview-section-title d-flex align-center">
                         <span class="text-h6">{{ tt('Net Income') }}</span>
                         <v-spacer />
-                        <span class="text-h6">{{ formatAmount(totalIncome - totalExpense) }}</span>
+                        <span class="text-h6">{{ formatAmount(totalIncome - totalExpense - totalDebtPayment) }}</span>
                     </div>
                 </v-card-text>
 
@@ -77,15 +78,15 @@
                     </div>
                     <div class="monthly-overview-category-grid" v-if="focusedSection.items.length">
                         <div class="monthly-overview-category-item cursor-pointer"
-                             :class="{ 'monthly-overview-category-item-dimmed': focusedSecondaryCategory && focusedSecondaryCategory.id !== item.category.id }"
-                             :key="item.category.id" v-for="item in focusedSection.items"
-                             @click="toggleSecondaryCategory(item.category)">
+                             :class="{ 'monthly-overview-category-item-dimmed': focusedSecondaryCategory && focusedSecondaryCategory.id !== item.id }"
+                             :key="item.id" v-for="item in focusedSection.items"
+                             @click="onClickOverviewItem(item)">
                             <div class="monthly-overview-category-ring" :style="getRingStyle(item.percent, focusedSection.color)">
                                 <div class="monthly-overview-category-icon">
-                                    <ItemIcon icon-type="category" :icon-id="item.category.icon" :color="item.category.color" size="32px" />
+                                    <ItemIcon icon-type="category" :icon-id="item.icon" :color="item.color" size="32px" />
                                 </div>
                             </div>
-                            <div class="monthly-overview-category-name text-truncate">{{ item.category.name }}</div>
+                            <div class="monthly-overview-category-name text-truncate">{{ item.name }}</div>
                             <div :class="focusedSection.textClass">{{ formatAmount(item.amount) }}</div>
                         </div>
                     </div>
@@ -110,7 +111,7 @@
                     <span>{{ transactionsScopeName }}</span>
                 </template>
                 <v-list class="py-0">
-                    <template :key="transaction.id" v-for="transaction in transactions">
+                    <template :key="transaction.id" v-for="transaction in displayTransactions">
                         <v-list-item class="py-2">
                             <template #prepend>
                                 <ItemIcon class="me-3" icon-type="category"
@@ -124,6 +125,7 @@
                             <v-list-item-subtitle>
                                 <span>{{ formatTransactionDate(transaction) }}</span>
                                 <span class="ms-2">{{ accountsStore.allAccountsMap[transaction.sourceAccountId]?.name }}</span>
+                                <span v-if="transaction.type === TransactionType.Transfer"> → {{ accountsStore.allAccountsMap[transaction.destinationAccountId]?.name }}</span>
                             </v-list-item-subtitle>
                             <template #append>
                                 <span class="ms-3 text-no-wrap" :class="transaction.type === TransactionType.Income ? 'text-income' : 'text-expense'">
@@ -134,7 +136,7 @@
                         <v-divider />
                     </template>
                 </v-list>
-                <v-card-text class="text-disabled" v-if="!transactionsLoading && !transactions.length">{{ tt('No transaction data') }}</v-card-text>
+                <v-card-text class="text-disabled" v-if="!transactionsLoading && !displayTransactions.length">{{ tt('No transaction data') }}</v-card-text>
                 <v-card-text class="d-flex justify-center" v-if="transactionsLoading || transactionsNextTimeId">
                     <v-btn variant="tonal" :loading="transactionsLoading" @click="loadTransactions(false)">{{ tt('Load More') }}</v-btn>
                 </v-card-text>
@@ -169,10 +171,12 @@ import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useExchangeRatesStore } from '@/stores/exchangeRates.ts';
 
 import type { TextualYearMonth, Year0BasedMonth } from '@/core/datetime.ts';
+import { AccountCategory } from '@/core/account.ts';
 import { CategoryType } from '@/core/category.ts';
 import { ThemeType } from '@/core/theme.ts';
 import { TimezoneTypeForStatistics } from '@/core/timezone.ts';
-import { TransactionType } from '@/core/transaction.ts';
+import { TransactionRelatedAccountType, TransactionType } from '@/core/transaction.ts';
+import type { Account } from '@/models/account.ts';
 import type { TransactionCategory } from '@/models/transaction_category.ts';
 import type { TransactionInfoResponse, TransactionStatisticTrendsResponseItem } from '@/models/transaction.ts';
 
@@ -212,22 +216,33 @@ interface MonthInfo {
 interface TransactionsScope {
     readonly minTime: number;
     readonly maxTime: number;
+    readonly type: number;
     readonly categoryIds: string;
+    readonly accountIds: string;
 }
 
-interface CategoryAmountItem {
-    readonly category: TransactionCategory;
+interface OverviewItemSource {
+    readonly id: string;
+    readonly name: string;
+    readonly icon: string;
+    readonly color: string;
+    readonly category?: TransactionCategory;
+    readonly account?: Account;
+}
+
+interface OverviewItem extends OverviewItemSource {
     readonly amount: number;
     readonly percent: number;
 }
 
-interface CategorySection {
-    readonly type: CategoryType;
+interface OverviewSection {
+    readonly key: string;
     readonly title: string;
+    readonly iconType: string;
     readonly textClass: string;
     readonly color: string;
     readonly totalAmount: number;
-    readonly items: CategoryAmountItem[];
+    readonly items: OverviewItem[];
 }
 
 const DEFAULT_MONTH_COUNT = 12;
@@ -255,6 +270,7 @@ const trendsData = ref<TransactionStatisticTrendsResponseItem[]>([]);
 const selectedMonthIndex = ref<number>(-1);
 const focusedPrimaryCategory = ref<TransactionCategory | null>(null);
 const focusedSecondaryCategory = ref<TransactionCategory | null>(null);
+const focusedDebtAccount = ref<Account | null>(null);
 const showTransactions = ref<boolean>(true);
 const transactions = ref<TransactionInfoResponse[]>([]);
 const transactionsLoading = ref<boolean>(false);
@@ -291,9 +307,11 @@ const displayMonthRange = computed<string>(() => {
     return first && last ? `${first.displayName} - ${last.displayName}` : '';
 });
 
-// amounts in default currency, indexed by month index then leaf category id
-const monthlyCategoryAmounts = computed<Record<string, number>[]>(() => {
-    const result: Record<string, number>[] = allMonths.value.map(() => ({}));
+const monthlyAmounts = computed<{ categories: Record<string, number>[], debtAccounts: Record<string, number>[] }>(() => {
+    // amounts in default currency, indexed by month index then leaf category id
+    const categories: Record<string, number>[] = allMonths.value.map(() => ({}));
+    // debt payments (transfers from non-debt accounts into debt accounts) in default currency, indexed by month index then top level debt account id
+    const debtAccounts: Record<string, number>[] = allMonths.value.map(() => ({}));
     const monthIndexes: Record<string, number> = {};
 
     allMonths.value.forEach((month, index) => {
@@ -302,9 +320,8 @@ const monthlyCategoryAmounts = computed<Record<string, number>[]>(() => {
 
     for (const trendItem of trendsData.value) {
         const monthIndex = monthIndexes[`${trendItem.year}-${trendItem.month}`];
-        const amounts = isNumber(monthIndex) ? result[monthIndex] : undefined;
 
-        if (!amounts) {
+        if (!isNumber(monthIndex) || !categories[monthIndex] || !debtAccounts[monthIndex]) {
             continue;
         }
 
@@ -312,7 +329,22 @@ const monthlyCategoryAmounts = computed<Record<string, number>[]>(() => {
             const account = accountsStore.allAccountsMap[item.accountId];
             const category = transactionCategoriesStore.allTransactionCategoriesMap[item.categoryId];
 
-            if (!account || !category || (category.type !== CategoryType.Income && category.type !== CategoryType.Expense)) {
+            if (!account || !category) {
+                continue;
+            }
+
+            let amounts: Record<string, number> | undefined = undefined;
+            let key = '';
+
+            if (category.type === CategoryType.Income || category.type === CategoryType.Expense) {
+                amounts = categories[monthIndex];
+                key = item.categoryId;
+            } else if (item.relatedAccountType === TransactionRelatedAccountType.TransferFrom && item.relatedAccountId && isDebtPayment(item.relatedAccountId, item.accountId)) {
+                amounts = debtAccounts[monthIndex];
+                key = getTopLevelAccount(item.accountId)?.id ?? '';
+            }
+
+            if (!amounts || !key) {
                 continue;
             }
 
@@ -322,54 +354,57 @@ const monthlyCategoryAmounts = computed<Record<string, number>[]>(() => {
                 continue;
             }
 
-            amounts[item.categoryId] = (amounts[item.categoryId] ?? 0) + Math.trunc(amount);
+            amounts[key] = (amounts[key] ?? 0) + Math.trunc(amount);
         }
     }
 
-    return result;
+    return { categories, debtAccounts };
 });
 
-const selectedCategoryAmounts = computed<Record<string, number>>(() => {
-    if (selectedMonthIndex.value >= 0) {
-        return monthlyCategoryAmounts.value[selectedMonthIndex.value] ?? {};
-    }
+const selectedCategoryAmounts = computed<Record<string, number>>(() => getSelectedAmounts(monthlyAmounts.value.categories));
+const selectedDebtAccountAmounts = computed<Record<string, number>>(() => getSelectedAmounts(monthlyAmounts.value.debtAccounts));
 
-    const total: Record<string, number> = {};
-
-    for (const amounts of monthlyCategoryAmounts.value) {
-        for (const [categoryId, amount] of Object.entries(amounts)) {
-            total[categoryId] = (total[categoryId] ?? 0) + amount;
-        }
-    }
-
-    return total;
-});
-
-const overviewSections = computed<CategorySection[]>(() => [
-    buildSection(CategoryType.Expense, tt('Expense'), getPrimaryCategoryAmounts(selectedCategoryAmounts.value, CategoryType.Expense)),
-    buildSection(CategoryType.Income, tt('Income'), getPrimaryCategoryAmounts(selectedCategoryAmounts.value, CategoryType.Income))
+const overviewSections = computed<OverviewSection[]>(() => [
+    buildSection('expense', tt('Expense'), 'category', false, getPrimaryCategoryItems(selectedCategoryAmounts.value, CategoryType.Expense)),
+    buildSection('debt', tt('Pay Off Debt'), 'account', false, getDebtAccountItems(selectedDebtAccountAmounts.value)),
+    buildSection('income', tt('Income'), 'category', true, getPrimaryCategoryItems(selectedCategoryAmounts.value, CategoryType.Income))
 ]);
 
 const totalExpense = computed<number>(() => overviewSections.value[0]?.totalAmount ?? 0);
-const totalIncome = computed<number>(() => overviewSections.value[1]?.totalAmount ?? 0);
+const totalDebtPayment = computed<number>(() => overviewSections.value[1]?.totalAmount ?? 0);
+const totalIncome = computed<number>(() => overviewSections.value[2]?.totalAmount ?? 0);
 
-const focusedSection = computed<CategorySection>(() => {
+const focusedSection = computed<OverviewSection>(() => {
     const primaryCategory = focusedPrimaryCategory.value;
-    const amounts: Record<string, number> = {};
+    const items: [OverviewItemSource, number][] = [];
 
     if (primaryCategory) {
         for (const [categoryId, amount] of Object.entries(selectedCategoryAmounts.value)) {
-            if (getPrimaryCategory(categoryId)?.id === primaryCategory.id) {
-                amounts[categoryId] = amount;
+            const category = transactionCategoriesStore.allTransactionCategoriesMap[categoryId];
+
+            if (category && getPrimaryCategory(categoryId)?.id === primaryCategory.id) {
+                items.push([getCategoryItemSource(category), amount]);
             }
         }
     }
 
-    return buildSection(primaryCategory?.type ?? CategoryType.Expense, primaryCategory?.name ?? '', amounts);
+    return buildSection('focused', primaryCategory?.name ?? '', 'category', primaryCategory?.type === CategoryType.Income, items);
 });
 
-const monthlyChartValues = computed<number[]>(() => monthlyCategoryAmounts.value.map(amounts => {
+const monthlyChartValues = computed<number[]>(() => monthlyAmounts.value.categories.map((amounts, monthIndex) => {
+    const debtAccountAmounts = monthlyAmounts.value.debtAccounts[monthIndex] ?? {};
+
+    if (focusedDebtAccount.value) {
+        return debtAccountAmounts[focusedDebtAccount.value.id] ?? 0;
+    }
+
     let total = 0;
+
+    if (!focusedPrimaryCategory.value) {
+        for (const amount of Object.values(debtAccountAmounts)) {
+            total -= amount;
+        }
+    }
 
     for (const [categoryId, amount] of Object.entries(amounts)) {
         const primaryCategory = getPrimaryCategory(categoryId);
@@ -400,6 +435,7 @@ const chartOptions = computed<EChartsCoreOption>(() => {
     const incomeColor = amountColors.value.incomeAmountColor;
     const expenseColor = amountColors.value.expenseAmountColor;
     const focusedColor = focusedPrimaryCategory.value?.type === CategoryType.Income ? incomeColor : expenseColor;
+    const isFocused = !!focusedPrimaryCategory.value || !!focusedDebtAccount.value;
 
     return {
         grid: { left: 80, right: 20, top: 10, bottom: 30 },
@@ -427,7 +463,7 @@ const chartOptions = computed<EChartsCoreOption>(() => {
                 return {
                     value: value,
                     itemStyle: {
-                        color: focusedPrimaryCategory.value ? focusedColor : (value >= 0 ? incomeColor : expenseColor),
+                        color: isFocused ? focusedColor : (value >= 0 ? incomeColor : expenseColor),
                         opacity: isDimmed ? 0.35 : 1
                     }
                 };
@@ -440,15 +476,21 @@ const transactionsScope = computed<TransactionsScope>(() => {
     const selectedMonth = selectedMonthIndex.value >= 0 ? allMonths.value[selectedMonthIndex.value] : undefined;
     const firstMonth = selectedMonth ?? allMonths.value[0];
     const lastMonth = selectedMonth ?? allMonths.value[allMonths.value.length - 1];
+    let type = 0;
     let categoryIds: string[] = [];
+    let accountIds: string[] = [];
 
-    if (focusedSecondaryCategory.value) {
+    if (focusedDebtAccount.value) {
+        type = TransactionType.Transfer;
+        accountIds = [focusedDebtAccount.value.id, ...(focusedDebtAccount.value.subAccounts ?? []).map(account => account.id)];
+    } else if (focusedSecondaryCategory.value) {
         categoryIds = [focusedSecondaryCategory.value.id];
     } else if (focusedPrimaryCategory.value) {
         categoryIds = [focusedPrimaryCategory.value.id];
     } else {
+        // transfer categories are included for debt payments, other transfers are filtered out after loading
         for (const category of Object.values(transactionCategoriesStore.allTransactionCategoriesMap)) {
-            if (category.parentId === '0' && (category.type === CategoryType.Income || category.type === CategoryType.Expense)) {
+            if (category.parentId === '0') {
                 categoryIds.push(category.id);
             }
         }
@@ -457,13 +499,31 @@ const transactionsScope = computed<TransactionsScope>(() => {
     return {
         minTime: firstMonth ? getYearMonthFirstUnixTime(firstMonth) : 0,
         maxTime: lastMonth ? getYearMonthLastUnixTime(lastMonth) : 0,
-        categoryIds: categoryIds.join(',')
+        type: type,
+        categoryIds: categoryIds.join(','),
+        accountIds: accountIds.join(',')
     };
 });
+
+const displayTransactions = computed<TransactionInfoResponse[]>(() => transactions.value.filter(transaction => {
+    if (transaction.type !== TransactionType.Transfer) {
+        return true;
+    }
+
+    if (!isDebtPayment(transaction.sourceAccountId, transaction.destinationAccountId)) {
+        return false;
+    }
+
+    return !focusedDebtAccount.value || getTopLevelAccount(transaction.destinationAccountId)?.id === focusedDebtAccount.value.id;
+}));
 
 const transactionsScopeName = computed<string>(() => {
     const dateName = selectedMonthIndex.value >= 0 ? allMonths.value[selectedMonthIndex.value]?.displayName : displayMonthRange.value;
     const categoryNames: string[] = [];
+
+    if (focusedDebtAccount.value) {
+        categoryNames.push(tt('Pay Off Debt'), focusedDebtAccount.value.name);
+    }
 
     if (focusedPrimaryCategory.value) {
         categoryNames.push(focusedPrimaryCategory.value.name);
@@ -499,7 +559,45 @@ function getPrimaryCategory(categoryId: string): TransactionCategory | undefined
     return transactionCategoriesStore.allTransactionCategoriesMap[category.parentId];
 }
 
-function getPrimaryCategoryAmounts(categoryAmounts: Record<string, number>, type: CategoryType): Record<string, number> {
+function getTopLevelAccount(accountId: string): Account | undefined {
+    const account = accountsStore.allAccountsMap[accountId];
+
+    if (!account || account.parentId === '0') {
+        return account;
+    }
+
+    return accountsStore.allAccountsMap[account.parentId];
+}
+
+function isDebtAccount(accountId: string): boolean {
+    return accountsStore.allAccountsMap[accountId]?.category === AccountCategory.DebtAccount.type;
+}
+
+function isDebtPayment(sourceAccountId: string, destinationAccountId: string): boolean {
+    return isDebtAccount(destinationAccountId) && !isDebtAccount(sourceAccountId);
+}
+
+function getSelectedAmounts(monthlyAmounts: Record<string, number>[]): Record<string, number> {
+    if (selectedMonthIndex.value >= 0) {
+        return monthlyAmounts[selectedMonthIndex.value] ?? {};
+    }
+
+    const total: Record<string, number> = {};
+
+    for (const amounts of monthlyAmounts) {
+        for (const [key, amount] of Object.entries(amounts)) {
+            total[key] = (total[key] ?? 0) + amount;
+        }
+    }
+
+    return total;
+}
+
+function getCategoryItemSource(category: TransactionCategory): OverviewItemSource {
+    return { id: category.id, name: category.name, icon: category.icon, color: category.color, category: category };
+}
+
+function getPrimaryCategoryItems(categoryAmounts: Record<string, number>, type: CategoryType): [OverviewItemSource, number][] {
     const amounts: Record<string, number> = {};
 
     for (const [categoryId, amount] of Object.entries(categoryAmounts)) {
@@ -510,25 +608,46 @@ function getPrimaryCategoryAmounts(categoryAmounts: Record<string, number>, type
         }
     }
 
-    return amounts;
-}
-
-function buildSection(type: CategoryType, title: string, amounts: Record<string, number>): CategorySection {
-    const isIncome = type === CategoryType.Income;
-    let totalAmount = 0;
-
-    for (const amount of Object.values(amounts)) {
-        totalAmount += amount;
-    }
-
-    const items: CategoryAmountItem[] = [];
+    const items: [OverviewItemSource, number][] = [];
 
     for (const [categoryId, amount] of Object.entries(amounts)) {
         const category = transactionCategoriesStore.allTransactionCategoriesMap[categoryId];
 
-        if (category && amount !== 0) {
+        if (category) {
+            items.push([getCategoryItemSource(category), amount]);
+        }
+    }
+
+    return items;
+}
+
+function getDebtAccountItems(accountAmounts: Record<string, number>): [OverviewItemSource, number][] {
+    const items: [OverviewItemSource, number][] = [];
+
+    for (const [accountId, amount] of Object.entries(accountAmounts)) {
+        const account = accountsStore.allAccountsMap[accountId];
+
+        if (account) {
+            items.push([{ id: account.id, name: account.name, icon: account.icon, color: account.color, account: account }, amount]);
+        }
+    }
+
+    return items;
+}
+
+function buildSection(key: string, title: string, iconType: string, isIncome: boolean, sources: [OverviewItemSource, number][]): OverviewSection {
+    let totalAmount = 0;
+
+    for (const [, amount] of sources) {
+        totalAmount += amount;
+    }
+
+    const items: OverviewItem[] = [];
+
+    for (const [source, amount] of sources) {
+        if (amount !== 0) {
             items.push({
-                category: category,
+                ...source,
                 amount: amount,
                 percent: totalAmount > 0 ? amount * 100 / totalAmount : 0
             });
@@ -538,8 +657,9 @@ function buildSection(type: CategoryType, title: string, amounts: Record<string,
     items.sort((item1, item2) => item2.amount - item1.amount);
 
     return {
-        type: type,
+        key: key,
         title: title,
+        iconType: iconType,
         textClass: isIncome ? 'text-income' : 'text-expense',
         color: isIncome ? amountColors.value.incomeAmountColor : amountColors.value.expenseAmountColor,
         totalAmount: totalAmount,
@@ -563,6 +683,21 @@ function getRingStyle(percent: number, color: string): Record<string, string> {
 function selectPrimaryCategory(category: TransactionCategory | null): void {
     focusedPrimaryCategory.value = category;
     focusedSecondaryCategory.value = null;
+    focusedDebtAccount.value = null;
+}
+
+function toggleDebtAccount(account: Account): void {
+    focusedDebtAccount.value = focusedDebtAccount.value?.id === account.id ? null : account;
+}
+
+function onClickOverviewItem(item: OverviewItem): void {
+    if (item.account) {
+        toggleDebtAccount(item.account);
+    } else if (item.category && focusedPrimaryCategory.value) {
+        toggleSecondaryCategory(item.category);
+    } else if (item.category) {
+        selectPrimaryCategory(item.category);
+    }
 }
 
 function toggleSecondaryCategory(category: TransactionCategory): void {
@@ -652,8 +787,8 @@ function loadTransactions(reset: boolean): void {
         transactionsNextTimeId.value = 0;
     }
 
-    // no income or expense category means no matching transactions, and an empty category filter would return all types
-    if (!scope.categoryIds || !scope.maxTime) {
+    // no category or account means no matching transactions, and an empty filter would return all types
+    if ((!scope.categoryIds && !scope.accountIds) || !scope.maxTime) {
         transactionsLoading.value = false;
         return;
     }
@@ -666,9 +801,9 @@ function loadTransactions(reset: boolean): void {
         count: TRANSACTIONS_PAGE_SIZE,
         page: 1,
         withCount: false,
-        type: 0,
+        type: scope.type,
         categoryIds: scope.categoryIds,
-        accountIds: '',
+        accountIds: scope.accountIds,
         tagFilter: '',
         amountFilter: '',
         keyword: ''
