@@ -112,7 +112,7 @@
                 </template>
                 <v-list class="py-0">
                     <template :key="transaction.id" v-for="transaction in displayTransactions">
-                        <v-list-item class="py-2">
+                        <v-list-item class="py-2" link @click="showTransaction(transaction)">
                             <template #prepend>
                                 <ItemIcon class="me-3" icon-type="category"
                                           :icon-id="getTransactionCategory(transaction)?.icon ?? ''"
@@ -151,11 +151,13 @@
                                   @dateRange:change="setCustomMonthRange"
                                   @error="onShowDateRangeError" />
 
+    <edit-dialog ref="editDialog" :type="TransactionEditPageType.Transaction" />
     <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
 import SnackBar from '@/components/desktop/SnackBar.vue';
+import EditDialog from '@/views/desktop/transactions/list/dialogs/EditDialog.vue';
 import VChart from 'vue-echarts';
 
 import { ref, computed, useTemplateRef, watch } from 'vue';
@@ -163,6 +165,7 @@ import { useTheme } from 'vuetify';
 import type { EChartsCoreOption, ElementEvent } from 'echarts/core';
 
 import { useI18n } from '@/locales/helpers.ts';
+import { TransactionEditPageType } from '@/views/base/transactions/TransactionEditPageBase.ts';
 
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
@@ -178,7 +181,7 @@ import { TimezoneTypeForStatistics } from '@/core/timezone.ts';
 import { TransactionRelatedAccountType, TransactionType } from '@/core/transaction.ts';
 import type { Account } from '@/models/account.ts';
 import type { TransactionCategory } from '@/models/transaction_category.ts';
-import type { TransactionInfoResponse, TransactionStatisticTrendsResponseItem } from '@/models/transaction.ts';
+import { type TransactionInfoResponse, type TransactionStatisticTrendsResponseItem, Transaction } from '@/models/transaction.ts';
 
 import { isNumber } from '@/lib/common.ts';
 import {
@@ -205,6 +208,7 @@ import {
 } from '@mdi/js';
 
 type SnackBarType = InstanceType<typeof SnackBar>;
+type EditDialogType = InstanceType<typeof EditDialog>;
 type VChartType = InstanceType<typeof VChart>;
 
 interface MonthInfo {
@@ -258,6 +262,7 @@ const transactionCategoriesStore = useTransactionCategoriesStore();
 const exchangeRatesStore = useExchangeRatesStore();
 
 const snackbar = useTemplateRef<SnackBarType>('snackbar');
+const editDialog = useTemplateRef<EditDialogType>('editDialog');
 const chart = useTemplateRef<VChartType>('chart');
 
 const currentMonth = getYear0BasedMonthObjectFromUnixTime(getCurrentUnixTime());
@@ -832,6 +837,25 @@ function loadTransactions(reset: boolean): void {
         if (error.response && error.response.data && error.response.data.errorMessage) {
             snackbar.value?.showError(error.response.data);
         } else if (!error.processed) {
+            snackbar.value?.showError(error);
+        }
+    });
+}
+
+function showTransaction(transaction: TransactionInfoResponse): void {
+    editDialog.value?.open({
+        id: transaction.id,
+        currentTransaction: Transaction.of(transaction)
+    }).then(result => {
+        if (result && result.message) {
+            snackbar.value?.showMessage(result.message);
+        }
+
+        // the dialog only resolves after the transaction is saved or deleted
+        reload();
+        loadTransactions(true);
+    }).catch(error => {
+        if (error) {
             snackbar.value?.showError(error);
         }
     });
