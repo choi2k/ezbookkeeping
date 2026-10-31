@@ -336,7 +336,7 @@ const totalPageCount = computed<number>(() => {
     return Math.ceil(count / countPerPage.value);
 });
 
-const dataTableHeight = computed<number>(() => 600);
+const dataTableHeight = 'max(400px, calc(100vh - 320px))';
 
 const dataTableHeaders = computed<object[]>(() => {
     const headers: object[] = [];
