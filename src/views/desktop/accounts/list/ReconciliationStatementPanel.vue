@@ -166,6 +166,7 @@ import { ref, computed, useTemplateRef, watch } from 'vue';
 import { useI18n } from '@/locales/helpers.ts';
 import { useReconciliationStatementPageBase } from '@/views/base/accounts/ReconciliationStatementPageBase.ts';
 
+import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
@@ -233,6 +234,7 @@ const {
     getDisplayAccountBalance
 } = useReconciliationStatementPageBase();
 
+const settingsStore = useSettingsStore();
 const userStore = useUserStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
@@ -243,7 +245,7 @@ const editDialog = useTemplateRef<EditDialogType>('editDialog');
 
 const loading = ref<boolean>(false);
 const currentPage = ref<number>(1);
-const countPerPage = ref<number>(15);
+const countPerPage = ref<number>(settingsStore.appSettings.itemsCountInTransactionListPage);
 const selectedDateRangeKey = ref<string>('all');
 const currentStartTime = ref<number>(0);
 const currentEndTime = ref<number>(0);
